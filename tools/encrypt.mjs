@@ -35,7 +35,7 @@ if (existsSync(OUTPUT)) {
     if (m) salt = m[1];
 }
 
-const html = readFileSync(CONTENT, "utf8").replace(/src="(maps\/[\w-]+\.jpg)"/g, (_, path) => {
+const html = readFileSync(CONTENT, "utf8").replace(/src="((?:maps|photos)\/[\w-]+\.jpg)"/g, (_, path) => {
     const img = readFileSync(join(PRIVATE, path)).toString("base64");
     return `src="data:image/jpeg;base64,${img}"`;
 });
