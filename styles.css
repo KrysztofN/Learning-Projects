@@ -88,16 +88,29 @@ body::before {
     backface-visibility: hidden;
 }
 
+@media (max-width: 700px) {
+    .invite-left,
+    .invite-right {
+        background-image: url(assets/invitation-m.jpg);
+    }
+}
+
 .invite-left {
     clip-path: inset(0 50% 0 0);
     transform-origin: left center;
-    animation: invite-open-left 2s 0.5s ease-in-out forwards;
+}
+
+.ready .invite-left {
+    animation: invite-open-left 2s 0.2s ease-in-out forwards;
 }
 
 .invite-right {
     clip-path: inset(0 0 0 50%);
     transform-origin: right center;
-    animation: invite-open-right 2s 0.5s ease-in-out forwards;
+}
+
+.ready .invite-right {
+    animation: invite-open-right 2s 0.2s ease-in-out forwards;
 }
 
 @keyframes invite-open-left {
@@ -164,8 +177,11 @@ body:not(.group-nocleg) [data-group="nocleg"] {
     padding: 16px;
     overflow-y: auto;
     opacity: 0;
-    animation: fade-in 0.8s 2.2s ease forwards;
     transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.ready .gate {
+    animation: fade-in 0.8s 1.9s ease forwards;
 }
 
 .gate-out .gate {
@@ -294,8 +310,15 @@ body:not(.group-nocleg) [data-group="nocleg"] {
     gap: 24px;
     padding: 12px 24px;
     opacity: 0;
-    animation: fade-in 0.8s calc(var(--hero-delay, 1.9s) + 1.2s) ease forwards;
-    transition: background 0.3s, box-shadow 0.3s;
+    transform: translateY(-100%);
+    pointer-events: none;
+    transition: transform 0.35s ease, opacity 0.35s ease, background 0.3s, box-shadow 0.3s;
+}
+
+.menu.scrolled {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
 }
 
 .menu.scrolled,
@@ -457,7 +480,7 @@ main {
     opacity: 0;
 }
 
-.unlocked .hero > * {
+.unlocked.ready .hero > * {
     animation: rise 1.1s cubic-bezier(.2, .7, .2, 1) forwards;
     animation-delay: calc(var(--hero-delay, 1.9s) + var(--i, 0) * 0.15s);
 }
@@ -1253,10 +1276,9 @@ main {
     }
 
     .hero > *,
-    .unlocked .hero > *,
+    .unlocked.ready .hero > *,
     .reveal,
-    .gate,
-    .menu {
+    .gate {
         opacity: 1;
         transform: none;
         animation: none;
@@ -1266,6 +1288,10 @@ main {
     .pin,
     .scroll-hint svg {
         animation: none;
+    }
+
+    .menu {
+        transition: none;
     }
 
     html {

@@ -53,7 +53,7 @@
             try {
                 const contentKey = await decrypt(rawKey, entry);
                 const html = new TextDecoder().decode(await decrypt(contentKey, window.ACCESS));
-                return { group: entry.group, html };
+                return { group: entry.group, html, key: contentKey };
             } catch {}
         }
         return null;
@@ -72,10 +72,39 @@
     }
 
     let group = null;
+    let mediaKey = null;
+
+    async function showEncrypted(img) {
+        try {
+            const buf = new Uint8Array(await (await fetch(img.dataset.enc)).arrayBuffer());
+            const key = await crypto.subtle.importKey("raw", mediaKey, "AES-GCM", false, ["decrypt"]);
+            const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.subarray(0, 12) }, key, buf.subarray(12));
+            img.src = URL.createObjectURL(new Blob([plain], { type: "image/jpeg" }));
+        } catch {}
+    }
+
+    function initEncryptedImages() {
+        const imgs = document.querySelectorAll("img[data-enc]");
+        if (!("IntersectionObserver" in window)) {
+            imgs.forEach(showEncrypted);
+            return;
+        }
+        const io = new IntersectionObserver(
+            (entries) =>
+                entries.forEach((e) => {
+                    if (!e.isIntersecting) return;
+                    io.unobserve(e.target);
+                    showEncrypted(e.target);
+                }),
+            { rootMargin: "800px 0px" }
+        );
+        imgs.forEach((img) => io.observe(img));
+    }
 
     function unlock(content, fromGate) {
         if (group) return;
         group = content.group;
+        mediaKey = content.key;
         const tpl = document.createElement("template");
         tpl.innerHTML = content.html;
         $("#app").replaceWith(tpl.content);
@@ -139,6 +168,7 @@
         initRsvp();
         initCalendar();
         initReveal();
+        initEncryptedImages();
         initMenu();
         initCopy();
         initModals();
@@ -378,7 +408,12 @@
         );
         document.addEventListener("keydown", (e) => e.key === "Escape" && setOpen(false));
 
-        const onScroll = () => menu.classList.toggle("scrolled", window.scrollY > 40);
+        const onScroll = () => {
+            const limit = document.body.classList.contains("page-open") ? 80 : window.innerHeight * 0.5;
+            const visible = window.scrollY > limit;
+            if (!visible && menu.classList.contains("open")) setOpen(false);
+            menu.classList.toggle("scrolled", visible);
+        };
         window.addEventListener("scroll", onScroll, { passive: true });
         onScroll();
 
@@ -653,15 +688,28 @@
         });
     }
 
+    function coverLoaded() {
+        const img = new Image();
+        img.src = window.matchMedia("(max-width: 700px)").matches ? "assets/invitation-m.jpg" : "assets/invitation.jpg";
+        const timeout = new Promise((r) => setTimeout(r, 5000));
+        return Promise.race([img.decode().catch(() => {}), timeout]);
+    }
+
     (async () => {
+        const cover = coverLoaded();
         const fromQr = new URLSearchParams(location.hash.slice(1)).get("k");
+        let opened = false;
         if (fromQr) {
             history.replaceState(null, "", location.pathname + location.search);
-            if (await tryPassword(fromQr, true)) return;
+            opened = await tryPassword(fromQr, true);
         }
-        const saved = readSession();
-        const content = saved && (await openContent(saved).catch(() => null));
-        if (content) unlock(content, false);
+        if (!opened) {
+            const saved = readSession();
+            const content = saved && (await openContent(saved).catch(() => null));
+            if (content) unlock(content, false);
+        }
+        await cover;
+        document.body.classList.add("ready");
     })();
 
     window.addEventListener("hashchange", () => {
