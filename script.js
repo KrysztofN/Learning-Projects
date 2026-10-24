@@ -329,7 +329,7 @@
             void countdown.offsetWidth;
             countdown.classList.add("pop");
             tick();
-            egg("czas", `Odliczamy w: ${COUNTDOWN_UNITS[unitIndex].forms[2]}`);
+            egg("czas");
         });
 
         const timer = setInterval(tick, 1000);
@@ -513,7 +513,7 @@
             celebrate();
             return;
         }
-        toast(isNew ? `${msg}  ·  niespodzianka ${foundEggs.length}/${EGGS.length}` : msg);
+        if (msg) toast(isNew ? `${msg}  ·  niespodzianka ${foundEggs.length}/${EGGS.length}` : msg);
     }
 
     const colors = ["#fff", "#ffd08a", "#e8456f", "#ff8c3a", "#ffb3c1"];
