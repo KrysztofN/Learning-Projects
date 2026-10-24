@@ -170,10 +170,67 @@
         initReveal();
         initEncryptedImages();
         initMenu();
-        initCopy();
         initModals();
+        initGallery();
         initPages();
         initEggs();
+    }
+
+    function initGallery() {
+        const items = [...document.querySelectorAll(".polaroid")];
+        const box = $("#lightbox");
+        if (!items.length || !box) return;
+        const figure = box.querySelector(".lightbox-photo");
+        const big = figure.querySelector("img");
+        const caption = figure.querySelector("figcaption");
+        const count = box.querySelector(".lightbox-count");
+        let index = 0;
+        big.draggable = false;
+
+        const ready = async (img) => {
+            if (!img.src.startsWith("blob:")) await showEncrypted(img);
+            return img.src;
+        };
+
+        async function show(n, from) {
+            index = (n + items.length) % items.length;
+            const img = items[index].querySelector("img");
+            caption.textContent = img.alt;
+            count.textContent = `${index + 1} / ${items.length}`;
+            big.alt = img.alt;
+            big.src = await ready(img);
+            figure.style.setProperty("--from", from || "0px");
+            figure.classList.remove("swap");
+            void figure.offsetWidth;
+            figure.classList.add("swap");
+            [index + 1, index - 1].forEach((k) => ready(items[(k + items.length) % items.length].querySelector("img")));
+        }
+
+        items.forEach((item, i) =>
+            item.addEventListener("click", () => {
+                box.showModal();
+                show(i);
+            })
+        );
+        box.querySelector(".lightbox-prev").addEventListener("click", () => show(index - 1, "-40px"));
+        box.querySelector(".lightbox-next").addEventListener("click", () => show(index + 1, "40px"));
+        box.addEventListener("click", (e) => {
+            if (e.target === box || e.target.closest("[data-close]")) box.close();
+        });
+        document.addEventListener("keydown", (e) => {
+            if (!box.open) return;
+            if (e.key === "ArrowRight") show(index + 1, "40px");
+            if (e.key === "ArrowLeft") show(index - 1, "-40px");
+        });
+
+        let start = null;
+        figure.addEventListener("pointerdown", (e) => (start = e.clientX));
+        figure.addEventListener("pointerup", (e) => {
+            if (start === null) return;
+            const dx = e.clientX - start;
+            start = null;
+            if (Math.abs(dx) > 40) show(index + (dx < 0 ? 1 : -1), dx < 0 ? "40px" : "-40px");
+        });
     }
 
     function initModals() {
@@ -241,7 +298,6 @@
 
     const COUNTDOWN_UNITS = [
         { ms: 86400000, forms: ["dzień", "dni", "dni"] },
-        { ms: 3600000, forms: ["godzina", "godziny", "godzin"] },
         { ms: 60000 / 72, forms: ["uderzenie serca", "uderzenia serca", "uderzeń serca"] },
     ];
     let unitIndex = 0;
@@ -308,13 +364,6 @@
         const { address: ADDRESS, events } = JSON.parse($("#event-data").textContent);
         const ev = { title: "Ślub Mileny i Krzysztofa", ...events[group] };
 
-        $("#add-gcal").href =
-            "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-            `&text=${encodeURIComponent(ev.title)}` +
-            `&dates=${ev.start}/${ev.end}` +
-            `&details=${encodeURIComponent(ev.details)}` +
-            `&location=${encodeURIComponent(ADDRESS)}`;
-
         $("#add-ics").addEventListener("click", () => {
             const esc = (t) => t.replace(/[\\,;]/g, "\\$&").replace(/\n/g, "\\n");
             const ics = [
@@ -346,19 +395,6 @@
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-        });
-    }
-
-    function initCopy() {
-        document.querySelectorAll("[data-copy]").forEach((btn) => {
-            btn.addEventListener("click", async () => {
-                try {
-                    await navigator.clipboard.writeText(btn.dataset.copy);
-                    toast("Adres skopiowany ♥");
-                } catch {
-                    toast(btn.dataset.copy);
-                }
-            });
         });
     }
 
@@ -446,7 +482,7 @@
         }
     }
 
-    const EGGS = ["serca", "czas", "dzwony", "lemoniada", "kolory", "memory"];
+    const EGGS = ["waz", "czas", "dzwony", "lemoniada", "kolory", "memory"];
     const EGGS_KEY = "wedding-eggs";
 
     function loadEggs() {
@@ -590,9 +626,9 @@
     function initEggs() {
         renderEggs();
 
-        $(".amp").addEventListener("click", (e) => {
-            burst(...centerOf(e.currentTarget));
-            egg("serca", "Miłość wisi w powietrzu ♥");
+        $("#egg-snake").addEventListener("click", () => {
+            egg("waz", "Ukryty wąż weselny odkryty!");
+            openGame("Wąż weselny", "Zbieraj weselne smakołyki i nie zjedz własnego ogona. Na komputerze steruj strzałkami na klawiaturze, a na telefonie przesuwaj palcem po planszy albo używaj przycisków pod nią.", snakeGame);
         });
 
         $("#egg-bells").addEventListener("click", (e) => {
@@ -686,6 +722,276 @@
             });
             grid.appendChild(card);
         });
+    }
+
+    function snakeGame(stage) {
+        const SIZE = 14;
+        const TREATS = ["💐", "🎂", "💌", "🍋", "🍓", "💍", "🧁"];
+        const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+        const ARROWS = { up: "▲", left: "◀", down: "▼", right: "▶" };
+        const KEYS = {
+            arrowup: "up", arrowdown: "down", arrowleft: "left", arrowright: "right",
+            w: "up", s: "down", a: "left", d: "right",
+        };
+        const BEST_KEY = "wedding-best-snake";
+        const BODY = "#b8314f";
+        const HEAD = "#8f2039";
+
+        const canvas = document.createElement("canvas");
+        canvas.className = "snake";
+        const ctx = canvas.getContext("2d");
+        const status = document.createElement("p");
+        status.className = "game-status";
+        const pad = document.createElement("div");
+        pad.className = "snake-pad";
+        pad.innerHTML = Object.keys(ARROWS)
+            .map((d) => `<button type="button" data-dir="${d}" aria-label="${d}">${ARROWS[d]}</button>`)
+            .join("");
+        const again = document.createElement("button");
+        again.type = "button";
+        again.className = "btn";
+        again.textContent = "Zagraj jeszcze raz";
+        again.hidden = true;
+        stage.append(canvas, status, pad, again);
+
+        let cell = 0;
+        let snake, prev, dir, queue, treat, score, running, over, best, last, frame;
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.height = Math.round(canvas.clientWidth * dpr);
+            cell = canvas.width / SIZE;
+        }
+
+        function placeTreat() {
+            const free = [];
+            for (let x = 0; x < SIZE; x++)
+                for (let y = 0; y < SIZE; y++)
+                    if (!snake.some((p) => p.x === x && p.y === y)) free.push({ x, y });
+            const spot = free[Math.floor(Math.random() * free.length)];
+            treat = { ...spot, icon: TREATS[Math.floor(Math.random() * TREATS.length)] };
+        }
+
+        function showStatus(prefix) {
+            status.textContent = (prefix ? prefix + "  ·  " : "") + `Wynik: ${score}` + (best ? `  ·  Rekord: ${best}` : "");
+        }
+
+        function reset() {
+            const mid = Math.floor(SIZE / 2);
+            snake = [{ x: mid, y: mid }, { x: mid - 1, y: mid }, { x: mid - 2, y: mid }];
+            prev = snake;
+            dir = "right";
+            queue = [];
+            score = 0;
+            running = false;
+            over = false;
+            best = readBest(BEST_KEY);
+            again.hidden = true;
+            placeTreat();
+            showStatus("Wybierz kierunek, aby zacząć");
+        }
+
+        const speed = () => Math.max(75, 170 - score * 6);
+
+        function turn(next) {
+            if (over) return;
+            const lastDir = queue.length ? queue[queue.length - 1] : dir;
+            const [lx, ly] = DIRS[lastDir];
+            const [nx, ny] = DIRS[next];
+            if (next === lastDir || (lx + nx === 0 && ly + ny === 0)) return;
+            if (queue.length < 2) queue.push(next);
+            if (!running) {
+                running = true;
+                last = performance.now();
+                showStatus();
+            }
+        }
+
+        function step() {
+            if (queue.length) dir = queue.shift();
+            const [dx, dy] = DIRS[dir];
+            const head = {
+                x: (snake[0].x + dx + SIZE) % SIZE,
+                y: (snake[0].y + dy + SIZE) % SIZE,
+            };
+            const eats = head.x === treat.x && head.y === treat.y;
+            const body = eats ? snake : snake.slice(0, -1);
+            if (body.some((p) => p.x === head.x && p.y === head.y)) return finish();
+            prev = snake;
+            snake = [head, ...body];
+            if (eats) {
+                score++;
+                const r = canvas.getBoundingClientRect();
+                burst(r.left + ((treat.x + 0.5) * r.width) / SIZE, r.top + ((treat.y + 0.5) * r.height) / SIZE, {
+                    chars: ["♥", treat.icon],
+                    count: 8,
+                    spread: 50,
+                });
+                if (snake.length === SIZE * SIZE) return finish();
+                placeTreat();
+                showStatus();
+            }
+        }
+
+        function finish() {
+            over = true;
+            running = false;
+            prev = snake;
+            const record = score > best;
+            if (record) {
+                best = score;
+                saveBest(BEST_KEY, score);
+            }
+            status.textContent = `Koniec! Wynik: ${score}` + (record ? "  ·  Nowy rekord!" : best ? `  ·  Rekord: ${best}` : "");
+            if (record) burst(...centerOf(canvas), { count: 30 });
+            again.hidden = false;
+        }
+
+        const wrapDelta = (d) => (d > 1 ? d - SIZE : d < -1 ? d + SIZE : d);
+
+        function points(t) {
+            const lerp = (a, b) => ({ x: a.x + wrapDelta(b.x - a.x) * t, y: a.y + wrapDelta(b.y - a.y) * t });
+            const pts = [lerp(prev[0], snake[0]), ...snake.slice(1).map((p) => ({ ...p }))];
+            if (prev.length === snake.length) pts.push(lerp(prev[prev.length - 1], snake[snake.length - 1]));
+            for (let i = 1; i < pts.length; i++) {
+                pts[i].x = pts[i - 1].x + wrapDelta(pts[i].x - pts[i - 1].x);
+                pts[i].y = pts[i - 1].y + wrapDelta(pts[i].y - pts[i - 1].y);
+            }
+            return pts;
+        }
+
+        function drawSnake(pts, ox, oy, now) {
+            const at = (p) => [(p.x + 0.5 + ox) * cell, (p.y + 0.5 + oy) * cell];
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = BODY;
+            ctx.lineWidth = cell * 0.7;
+            ctx.beginPath();
+            ctx.moveTo(...at(pts[pts.length - 1]));
+            pts.slice(0, -1).reverse().forEach((p) => ctx.lineTo(...at(p)));
+            ctx.stroke();
+
+            const [hx, hy] = at(pts[0]);
+            const [dx, dy] = DIRS[dir];
+            ctx.save();
+            ctx.translate(hx, hy);
+            ctx.rotate(Math.atan2(dy, dx));
+            ctx.scale(cell, cell);
+
+            if (!over && Math.sin(now / 160) > -0.2) {
+                ctx.strokeStyle = "#d4143f";
+                ctx.lineWidth = 0.08;
+                ctx.beginPath();
+                ctx.moveTo(0.5, 0);
+                ctx.lineTo(0.8, 0);
+                ctx.lineTo(0.92, -0.1);
+                ctx.moveTo(0.8, 0);
+                ctx.lineTo(0.92, 0.1);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = HEAD;
+            ctx.beginPath();
+            ctx.ellipse(0.1, 0, 0.5, 0.43, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            [-1, 1].forEach((side) => {
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.ellipse(0.2, side * 0.2, 0.13, 0.11, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#2b0711";
+                ctx.beginPath();
+                if (over) ctx.ellipse(0.22, side * 0.2, 0.09, 0.025, 0, 0, Math.PI * 2);
+                else ctx.arc(0.25, side * 0.2, 0.06, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+            [-1, 1].forEach((side) => {
+                ctx.beginPath();
+                ctx.arc(0.5, side * 0.08, 0.025, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function draw(t, now) {
+            if (!cell) return;
+            ctx.fillStyle = "#ffb27a";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#ffaa70";
+            for (let x = 0; x < SIZE; x++)
+                for (let y = 0; y < SIZE; y++)
+                    if ((x + y) % 2) ctx.fillRect(x * cell, y * cell, cell, cell);
+
+            const pulse = 1 + Math.sin(now / 220) * 0.06;
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.font = `${cell * 0.78 * pulse}px sans-serif`;
+            ctx.fillText(treat.icon, (treat.x + 0.5) * cell, (treat.y + 0.56) * cell);
+
+            const pts = points(t);
+            for (const ox of [-SIZE, 0, SIZE]) for (const oy of [-SIZE, 0, SIZE]) drawSnake(pts, ox, oy, now);
+        }
+
+        function loop(now) {
+            if (running) {
+                while (running && now - last >= speed()) {
+                    last += speed();
+                    step();
+                }
+            }
+            const t = running ? Math.min(1, (now - last) / speed()) : 1;
+            draw(t, now);
+            frame = requestAnimationFrame(loop);
+        }
+
+        const onKey = (e) => {
+            const d = KEYS[e.key.toLowerCase()];
+            if (!d) return;
+            e.preventDefault();
+            turn(d);
+        };
+
+        let start = null;
+        const onDown = (e) => {
+            start = [e.clientX, e.clientY];
+        };
+        const onMove = (e) => {
+            if (!start) return;
+            const dx = e.clientX - start[0];
+            const dy = e.clientY - start[1];
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) return;
+            turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up");
+            start = [e.clientX, e.clientY];
+        };
+        const onUp = () => {
+            start = null;
+        };
+
+        pad.addEventListener("click", (e) => {
+            const b = e.target.closest("[data-dir]");
+            if (b) turn(b.dataset.dir);
+        });
+        again.addEventListener("click", reset);
+        canvas.addEventListener("pointerdown", onDown);
+        canvas.addEventListener("pointermove", onMove);
+        canvas.addEventListener("pointerup", onUp);
+        canvas.addEventListener("pointercancel", onUp);
+        document.addEventListener("keydown", onKey);
+        window.addEventListener("resize", resize);
+
+        reset();
+        resize();
+        frame = requestAnimationFrame(loop);
+
+        return () => {
+            cancelAnimationFrame(frame);
+            document.removeEventListener("keydown", onKey);
+            window.removeEventListener("resize", resize);
+        };
     }
 
     function coverLoaded() {
