@@ -1009,7 +1009,7 @@
             history.replaceState(null, "", location.pathname + location.search);
             opened = await tryPassword(fromQr, true);
         }
-        if (!opened) {
+        if (!opened && !fromQr) {
             const saved = readSession();
             const content = saved && (await openContent(saved).catch(() => null));
             if (content) unlock(content, false);
